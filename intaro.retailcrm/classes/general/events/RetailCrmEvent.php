@@ -1,5 +1,7 @@
 <?php
 
+use Intaro\RetailCrm\Service\ManagerService;
+
 /**
  * Class RetailCrmEvent
  */
@@ -403,6 +405,11 @@ class RetailCrmEvent
                     return false;
                 }
             }
+        }
+
+        if (isset($arOrder['RESPONSIBLE_ID']) && !empty($arOrder['RESPONSIBLE_ID'])) {
+            $managerService = new ManagerService();
+            $arParams['managerId']  = $managerService->getManagerCrmId((int) $arOrder['RESPONSIBLE_ID']);
         }
 
         //order

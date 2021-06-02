@@ -429,7 +429,7 @@ class RetailCrmOrder
                 continue;
             }
 
-            if ("Y" === RetailcrmConfigProvider::getCorporateClientStatus()
+            if ('Y' === RetailcrmConfigProvider::getCorporateClientStatus()
                 && $optionsContragentType[$order['PERSON_TYPE_ID']] == 'legal-entity'
             ) {
                 // TODO check if order is corporate, and if it IS - make corporate order

@@ -469,7 +469,7 @@ class RetailCrmOrder
             }
 
             if (isset($order['RESPONSIBLE_ID']) && !empty($order['RESPONSIBLE_ID'])) {
-                $managerService = new ManagerService();
+                $managerService = ManagerService::getInstance();
                 $arParams['managerId']  = $managerService->getManagerCrmId($order['RESPONSIBLE_ID']);
             }
 

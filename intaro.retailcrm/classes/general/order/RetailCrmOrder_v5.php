@@ -5,6 +5,7 @@ use Bitrix\Main\Context\Culture;
 use Bitrix\Main\UserTable;
 use Bitrix\Sale\Delivery\Services\Manager;
 use Bitrix\Sale\Internals\Fields;
+use Bitrix\Sale\Internals\OrderTable;
 use Bitrix\Sale\Location\Name\LocationTable;
 use Bitrix\Sale\Order;
 use RetailCrm\ApiClient;
@@ -375,7 +376,7 @@ class RetailCrmOrder
         } elseif (count($orderList) > 0) {
             $orderIds = $orderList;
         } else {
-            $dbOrder = \Bitrix\Sale\Internals\OrderTable::GetList([
+            $dbOrder = OrderTable::GetList([
                 'order'   => ['ID' => 'ASC'],
                 'filter'  => ['>ID' => $lastUpOrderId],
                 'limit'   => $pSize,

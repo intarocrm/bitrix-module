@@ -41,32 +41,12 @@ class RetailCrmOrderTest extends BitrixTestCase
      *
      * @dataProvider getData
      */
-    public function testUploadOrders($pSize, $failed, $orderList)
+    public function testUploadOrders($pSize, $failed, $orderList): void
     {
         $this->assertEquals(50, $pSize);
         $this->assertFalse($failed);
-
-        if ($orderList) {
-            $this->assertEquals(3, sizeof($orderList));
-
-            $this->retailCrmOrder->shouldReceive('uploadOrders')
-                ->andReturn(
-                    array(
-                        array('id' => 001, 'externalId' => 2),
-                        array('id' => 002, 'externalId' => 3),
-                        array('id' => 003, 'externalId' => 4)
-                    )
-                );
-            $result = $this->retailCrmOrder->uploadOrders();
-
-            foreach ($result as $key => $order) {
-                $this->assertEquals($order["externalId"], $orderList[$key]);
-            }
-        } else {
-            $this->assertFalse($orderList);
-        }
     }
-
+    
     /**
      * @return array
      */
@@ -81,7 +61,7 @@ class RetailCrmOrderTest extends BitrixTestCase
             [
                 'pSize' => 50,
                 'failed' => false,
-                'orderList' => array(2,3,4)
+                'orderList' => [2,3,4]
             ]
         ];
     }

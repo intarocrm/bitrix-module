@@ -1,24 +1,35 @@
 <?php
+
+use Bitrix\Sale\Delivery\Services\EmptyDeliveryService;
+use Bitrix\Sale\Internals\OrderPropsTable;
+use Bitrix\Sale\Internals\StatusTable;
+use Bitrix\Sale\PaySystem\Manager;
+use RetailCrm\Exception\CurlException;
+use RetailCrm\Exception\InvalidJsonException;
+
 IncludeModuleLangFile(__FILE__);
 class RCrmActions
 {
     public static $MODULE_ID = 'intaro.retailcrm';
     public static $CRM_ORDER_FAILED_IDS = 'order_failed_ids';
     public static $CRM_API_VERSION = 'api_version';
-
-    const CANCEL_PROPERTY_CODE = 'INTAROCRM_IS_CANCELED';
-
-    public static function SitesList()
+    public const CANCEL_PROPERTY_CODE = 'INTAROCRM_IS_CANCELED';
+    
+    /**
+     * @return array
+     */
+    public static function getSitesList(): array
     {
-        $arSites = array();
-        $rsSites = CSite::GetList($by, $sort, array('ACTIVE' => 'Y'));
+        $arSites = [];
+        $rsSites = CSite::GetList($by, $sort, ['ACTIVE' => 'Y']);
+        
         while ($ar = $rsSites->Fetch()) {
             $arSites[] = $ar;
         }
-
+        
         return $arSites;
     }
-
+    
     public static function OrderTypesList($arSites)
     {
         $orderTypesList = array();
@@ -41,7 +52,7 @@ class RCrmActions
     {
         $bitrixDeliveryTypesList = array();
         $arDeliveryServiceAll = \Bitrix\Sale\Delivery\Services\Manager::getActiveList();
-        $noOrderId = \Bitrix\Sale\Delivery\Services\EmptyDeliveryService::getEmptyDeliveryServiceId();
+        $noOrderId = EmptyDeliveryService::getEmptyDeliveryServiceId();
         $groups = array();
         foreach ($arDeliveryServiceAll as $arDeliveryService) {
             if ($arDeliveryService['CLASS_NAME'] == '\Bitrix\Sale\Delivery\Services\Group') {
@@ -66,7 +77,7 @@ class RCrmActions
     public static function PaymentList()
     {
         $bitrixPaymentTypesList = array();
-        $dbPaymentAll = \Bitrix\Sale\PaySystem\Manager::getList(array(
+        $dbPaymentAll = Manager::getList(array(
             'select' => array('ID', 'NAME'),
             'filter' => array('ACTIVE' => 'Y')
         ));
@@ -80,9 +91,9 @@ class RCrmActions
     public static function StatusesList()
     {
         $bitrixPaymentStatusesList = array();
-        $obStatuses = \Bitrix\Sale\Internals\StatusTable::getList(array(
+        $obStatuses = StatusTable::getList(array(
             'filter' => array('TYPE' => 'O', '=Bitrix\Sale\Internals\StatusLangTable:STATUS.LID' => LANGUAGE_ID),
-            'select' => array('ID', "NAME" => 'Bitrix\Sale\Internals\StatusLangTable:STATUS.NAME')
+            'select' => array('ID', 'NAME' => 'Bitrix\Sale\Internals\StatusLangTable:STATUS.NAME')
         ));
         while ($arStatus = $obStatuses->fetch()) {
             $bitrixPaymentStatusesList[$arStatus['ID']] = array(
@@ -97,7 +108,7 @@ class RCrmActions
     public static function OrderPropsList()
     {
         $bitrixPropsList = array();
-        $arPropsAll = \Bitrix\Sale\Internals\OrderPropsTable::getList(array(
+        $arPropsAll = OrderPropsTable::getList(array(
             'select' => array('*'),
             'filter' => array('CODE' => '_%')
         ));
@@ -130,7 +141,7 @@ class RCrmActions
     public static function StoresExportList()
     {
         $catalogExportStores = array();
-        $dbStores = CCatalogStore::GetList(array(), array("ACTIVE" => "Y"), false, false, array('ID', 'TITLE'));
+        $dbStores = CCatalogStore::GetList(array(), array('ACTIVE' => 'Y'), false, false, array('ID', 'TITLE'));
         while ($stores = $dbStores->Fetch()) {
             $catalogExportStores[] = $stores;
         }
@@ -141,10 +152,10 @@ class RCrmActions
     public static function IblocksExportList()
     {
         $catalogExportIblocks = array();
-        $dbIblocks = CIBlock::GetList(array("IBLOCK_TYPE" => "ASC", "NAME" => "ASC"), array('CHECK_PERMISSIONS' => 'Y','MIN_PERMISSION' => 'W'));
+        $dbIblocks = CIBlock::GetList(array('IBLOCK_TYPE' => 'ASC', 'NAME' => 'ASC'), array('CHECK_PERMISSIONS' => 'Y', 'MIN_PERMISSION' => 'W'));
         while ($iblock = $dbIblocks->Fetch()) {
-            if ($arCatalog = CCatalog::GetByIDExt($iblock["ID"])) {
-                if($arCatalog['CATALOG_TYPE'] == "D" || $arCatalog['CATALOG_TYPE'] == "X" || $arCatalog['CATALOG_TYPE'] == "P") {
+            if ($arCatalog = CCatalog::GetByIDExt($iblock['ID'])) {
+                if($arCatalog['CATALOG_TYPE'] == 'D' || $arCatalog['CATALOG_TYPE'] == 'X' || $arCatalog['CATALOG_TYPE'] == 'P') {
                     $catalogExportIblocks[$iblock['ID']] = array(
                         'ID' => $iblock['ID'],
                         'IBLOCK_TYPE_ID' => $iblock['IBLOCK_TYPE_ID'],
@@ -153,8 +164,8 @@ class RCrmActions
                         'NAME' => $iblock['NAME'],
                     );
 
-                    if ($arCatalog['CATALOG_TYPE'] == "X" || $arCatalog['CATALOG_TYPE'] == "P") {
-                        $iblockOffer = CCatalogSKU::GetInfoByProductIBlock($iblock["ID"]);
+                    if ($arCatalog['CATALOG_TYPE'] == 'X' || $arCatalog['CATALOG_TYPE'] == 'P') {
+                        $iblockOffer = CCatalogSKU::GetInfoByProductIBlock($iblock['ID']);
                         $catalogExportIblocks[$iblock['ID']]['SKU'] = $iblockOffer;
                     }
                 }
@@ -172,11 +183,11 @@ class RCrmActions
     public static function eventLog($auditType, $itemId, $description)
     {
         CEventLog::Add(array(
-            "SEVERITY"      => "SECURITY",
-            "AUDIT_TYPE_ID" => $auditType,
-            "MODULE_ID"     => self::$MODULE_ID,
-            "ITEM_ID"       => $itemId,
-            "DESCRIPTION"   => $description,
+            'SEVERITY'      => 'SECURITY',
+            'AUDIT_TYPE_ID' => $auditType,
+            'MODULE_ID'     => self::$MODULE_ID,
+            'ITEM_ID'       => $itemId,
+            'DESCRIPTION'   => $description,
         ));
     }
 
@@ -361,7 +372,7 @@ class RCrmActions
         if (empty($fio)) {
             return $result;
         } else {
-            $newFio = explode(" ", $fio, 3);
+            $newFio = explode(' ', $fio, 3);
         }
 
         switch (count($newFio)) {
@@ -476,7 +487,7 @@ class RCrmActions
 
             if (!$result) {
                 $err = new RuntimeException(
-                    $methodApi . ": Got null instead of valid result!"
+                    $methodApi . ': Got null instead of valid result!'
                 );
                 Logger::getInstance()->write(sprintf(
                     '%s%s%s',
@@ -534,7 +545,7 @@ class RCrmActions
 
                 return false;
             }
-        } catch (\RetailCrm\Exception\CurlException $e) {
+        } catch (CurlException $e) {
             static::logException(
                 $method,
                 $methodApi,
@@ -558,7 +569,7 @@ class RCrmActions
             );
 
             return false;
-        } catch (\RetailCrm\Exception\InvalidJsonException $e) {
+        } catch (InvalidJsonException $e) {
             static::logException(
                 $method,
                 $methodApi,

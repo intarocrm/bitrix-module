@@ -11,11 +11,6 @@ class AdminPanel extends Controller
     public function configureActions(): array
     {
         return [
-            'loyaltyProgramToggle' => [
-                '-prefilters' => [
-                    Authentication::class,
-                ],
-            ],
             'createTemplate' => [
                 '-prefilters' => [
                     Authentication::class,
@@ -28,20 +23,17 @@ class AdminPanel extends Controller
      * @param array  $templates
      * @param string $donor
      * @param string $replaceDefaultTemplate
+     *
      * @return array
      */
-    public function createTemplateAction(array $templates, string $donor ,$replaceDefaultTemplate = 'N'): array
+    public function createTemplateAction(array $templates, string $donor, string $replaceDefaultTemplate = 'N'): array
     {
-        $templateName = $replaceDefaultTemplate === 'Y' ? '.default' : Constants::MODULE_ID;
-    
+        $templateName = $replaceDefaultTemplate === 'Y' ? '.default' : Constants::DEFAULT_LOYALTY_TEMPLATE;
         $donor = str_replace(['../', './'], '', $donor);
-        
-    
+
         foreach ($templates as $template) {
-    
             $template['location'] = str_replace(['../', './'], '', $template['location']);
             $template['name'] = str_replace(['../', './'], '', $template['name']);
-            
             $pathFrom = $_SERVER['DOCUMENT_ROOT']
                 . '/bitrix/modules/'
                 . Constants::MODULE_ID
@@ -80,7 +72,7 @@ class AdminPanel extends Controller
                 false
             );
         }
-        
+
         return [
             'status' => $status ?? false,
         ];

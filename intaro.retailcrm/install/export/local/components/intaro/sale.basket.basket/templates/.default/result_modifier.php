@@ -8,21 +8,47 @@ if (!defined('B_PROLOG_INCLUDED') || B_PROLOG_INCLUDED !== true) {
 
 /** @var array $arResult */
 
-use Bitrix\Main;
 use Bitrix\Main\Config\Option;
+use Bitrix\Main\Loader;
+use Bitrix\Main\LoaderException;
 use Intaro\RetailCrm\Component\ConfigProvider;
 use Intaro\RetailCrm\Component\ServiceLocator;
 use Intaro\RetailCrm\Model\Api\Response\Loyalty\LoyaltyCalculateResponse;
 use Intaro\RetailCrm\Service\LoyaltyService;
+use Intaro\RetailCrm\Service\LoyaltyAccountService;
 
-try {
-    Main\Loader::includeModule('intaro.retailcrm');
-} catch (Main\LoaderException $exception) {
-    AddMessage2Log($exception->getMessage());
+/** RetailCRM loyalty program  start*/
+function checkLoadIntaro(): bool
+{
+    try {
+        return Loader::includeModule('intaro.retailcrm');
+    } catch (LoaderException $e) {
+        return false;
+    }
 }
 
-$contragentsTypes = ConfigProvider::getContragentTypes();
-$key              = array_search('individual', $contragentsTypes, true);
+if (checkLoadIntaro()) {
+    $arResult['LOYALTY_STATUS'] = ConfigProvider::getLoyaltyProgramStatus();
+    $arResult['PERSONAL_LOYALTY_STATUS'] = LoyaltyAccountService::getLoyaltyPersonalStatus();
+    
+    /** @var LoyaltyService $service */
+    $service = ServiceLocator::get(LoyaltyService::class);
+    
+    if ($arResult['LOYALTY_STATUS'] === 'Y' && $arResult['PERSONAL_LOYALTY_STATUS'] === true) {
+        $calculate = $service->getLoyaltyCalculate($arResult['BASKET_ITEM_RENDER_DATA']);
+
+        if (
+            $calculate instanceof LoyaltyCalculateResponse
+            && $calculate->success
+            && null !== $calculate->order->loyaltyAccount
+        ) {
+            $arResult = $service->addLoyaltyToBasket($arResult, $calculate);
+        }
+    }
+} else {
+    AddMessage2Log(GetMessage('INTARO_NOT_INSTALLED'));
+}
+/** RetailCRM loyalty program end */
 
 $defaultParams = [
     'TEMPLATE_THEME' => 'blue',
@@ -52,19 +78,4 @@ if ('' !== $arParams['TEMPLATE_THEME']) {
 
 if ('' === $arParams['TEMPLATE_THEME']) {
     $arParams['TEMPLATE_THEME'] = 'blue';
-}
-
-
-$arResult['LOYALTY_STATUS']          = ConfigProvider::getLoyaltyProgramStatus();
-$arResult['PERSONAL_LOYALTY_STATUS'] = LoyaltyService::getLoyaltyPersonalStatus();
-
-/** @var LoyaltyService $service */
-$service = ServiceLocator::get(LoyaltyService::class);
-
-if ($arResult['LOYALTY_STATUS'] === 'Y' && $arResult['PERSONAL_LOYALTY_STATUS'] === true) {
-    $calculate = $service->calculateBonus($arResult['BASKET_ITEM_RENDER_DATA']);
-    
-    if ($calculate instanceof LoyaltyCalculateResponse && $calculate->success) {
-        $arResult = $service->calculateBasket($arResult, $calculate);
-    }
 }

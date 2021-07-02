@@ -6,48 +6,58 @@ use Bitrix\Main\LoaderException;
 use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Intaro\RetailCrm\Component\ConfigProvider;
+use Intaro\RetailCrm\Component\Constants;
 use Intaro\RetailCrm\Component\ServiceLocator;
 use Intaro\RetailCrm\Repository\AgreementRepository;
 use Intaro\RetailCrm\Service\CustomerService;
-use Intaro\RetailCrm\Service\LoyaltyService;
+use Intaro\RetailCrm\Service\LoyaltyAccountService;
 
-try {
-    Loader::includeModule('intaro.retailcrm');
-} catch (LoaderException $exception) {
-    AddMessage2Log($exception->getMessage());
+/** RetailCRM loyalty program start */
+function checkLoadIntaro(): bool
+{
+    try {
+        return Loader::includeModule('intaro.retailcrm');
+    } catch (LoaderException $e) {
+        return false;
+    }
 }
 
-$arResult['LOYALTY_STATUS'] = ConfigProvider::getLoyaltyProgramStatus();
-
-global $USER;
-
-if ($arResult['LOYALTY_STATUS'] === 'Y' && $USER->IsAuthorized()) {
-    /** @var CustomerService $customerService */
-    $customerService = ServiceLocator::get(CustomerService::class);
-    $customer        = $customerService->createModel($USER->GetID());
-
-    $customerService->createCustomer($customer);
-
-    /* @var LoyaltyService $service*/
-    $service                 = ServiceLocator::get(LoyaltyService::class);
-    $arResult['LP_REGISTER'] = $service->checkRegInLp();
+if (checkLoadIntaro()) {
+    $arResult['LOYALTY_STATUS'] = ConfigProvider::getLoyaltyProgramStatus();
+    
+    global $USER;
+    
+    if ('Y' === $arResult['LOYALTY_STATUS'] && $USER->IsAuthorized()) {
+        /** @var CustomerService $customerService */
+        $customerService = ServiceLocator::get(CustomerService::class);
+        $customer = $customerService->createModel($USER->GetID());
+        
+        $customerService->createCustomer($customer);
+        
+        /* @var LoyaltyAccountService $service */
+        $service = ServiceLocator::get(LoyaltyAccountService::class);
+        $arResult['LP_REGISTER'] = $service->checkRegInLp();
+    }
+    
+    try {
+        $agreementPersonalData = AgreementRepository::getFirstByWhere(
+            ['AGREEMENT_TEXT'],
+            [
+                ['CODE', '=', 'AGREEMENT_PERSONAL_DATA_CODE'],
+            ]
+        );
+        $agreementLoyaltyProgram = AgreementRepository::getFirstByWhere(
+            ['AGREEMENT_TEXT'],
+            [
+                ['CODE', '=', 'AGREEMENT_LOYALTY_PROGRAM_CODE'],
+            ]
+        );
+        $arResult['AGREEMENT_PERSONAL_DATA'] = $agreementPersonalData['AGREEMENT_TEXT'];
+        $arResult['AGREEMENT_LOYALTY_PROGRAM'] = $agreementLoyaltyProgram['AGREEMENT_TEXT'];
+    } catch (ObjectPropertyException | ArgumentException | SystemException $exception) {
+        Logger::getInstance()->write($exception->getMessage(), Constants::TEMPLATES_ERROR);
+    }
+} else {
+    AddMessage2Log(GetMessage('INTARO_NOT_INSTALLED'));
 }
-
-try {
-    $agreementPersonalData                 = AgreementRepository::getFirstByWhere(
-        ['AGREEMENT_TEXT'],
-        [
-            ['CODE', '=', 'AGREEMENT_PERSONAL_DATA_CODE'],
-        ]
-    );
-    $agreementLoyaltyProgram               = AgreementRepository::getFirstByWhere(
-        ['AGREEMENT_TEXT'],
-        [
-            ['CODE', '=', 'AGREEMENT_LOYALTY_PROGRAM_CODE'],
-        ]
-    );
-    $arResult['AGREEMENT_PERSONAL_DATA']   = $agreementPersonalData['AGREEMENT_TEXT'];
-    $arResult['AGREEMENT_LOYALTY_PROGRAM'] = $agreementLoyaltyProgram['AGREEMENT_TEXT'];
-} catch (ObjectPropertyException | ArgumentException | SystemException $e) {
-    AddMessage2Log($e->getMessage());
-}
+/** RetailCRM loyalty program end */

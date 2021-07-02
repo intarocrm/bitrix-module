@@ -22,6 +22,7 @@ use Intaro\RetailCrm\Component\Json\Deserializer;
 use Intaro\RetailCrm\Component\Json\Serializer;
 use Intaro\RetailCrm\Model\Bitrix\OrderLoyaltyData;
 use Intaro\RetailCrm\Service\Utils;
+use Logger;
 
 /**
  * Class OrderLoyaltyDataRepository
@@ -36,12 +37,18 @@ class OrderLoyaltyDataRepository extends AbstractRepository
     private $dataManager;
     
     /**
+     * @var \Logger
+     */
+    private $logger;
+    
+    /**
      * OrderLoyaltyDataRepository constructor.
      * @throws \Bitrix\Main\LoaderException
      * @throws \Bitrix\Main\SystemException
      */
     public function __construct()
     {
+        $this->logger = Logger::getInstance();
         $this->dataManager = Utils::getHlClassByName(Constants::HL_LOYALTY_CODE);
     }
    
@@ -68,7 +75,7 @@ class OrderLoyaltyDataRepository extends AbstractRepository
             
             return null;
         } catch (Exception $exception) {
-            AddMessage2Log($exception->getMessage());
+            $this->logger->write($exception->getMessage(), Constants::LOYALTY_ERROR);
         }
         
         return null;
@@ -93,39 +100,57 @@ class OrderLoyaltyDataRepository extends AbstractRepository
             /** @var OrderLoyaltyData $result */
             return Deserializer::deserializeArray($product, OrderLoyaltyData::class);
         } catch (ObjectPropertyException | ArgumentException | SystemException $exception) {
-            AddMessage2Log($exception->getMessage());
+            $this->logger->write($exception->getMessage(), Constants::LOYALTY_ERROR);
         }
     }
     
     /**
      * @param $orderId
-     * @return OrderLoyaltyData[]|null
+     *
+     * @return OrderLoyaltyData[]
      */
-    public function getProductsByOrderId($orderId): ?array
+    public function getProductsByOrderId($orderId): array
+    {
+        $products = $this->getHlRowByOrderId($orderId);
+
+        if (count($products) === 0 || false === $products) {
+            return [];
+        }
+
+        $result = [];
+
+        foreach ($products as $product) {
+            $result[$product['UF_ITEM_POS_ID']]
+                = Deserializer::deserializeArray($product, OrderLoyaltyData::class);
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param int $orderId
+     *
+     * @return array|false //fetchAll может вернуть false
+     */
+    private function getHlRowByOrderId(int $orderId)
     {
         try {
             if ($this->dataManager === null) {
-                return null;
+                return [];
             }
-        
-            $products = $this->dataManager::query()->setSelect(['*'])->where('UF_ORDER_ID', '=', $orderId)->fetchAll();
 
-            if ($products === false || count($products) === 0) {
-                return null;
-            }
-        
-            $result = [];
-        
-            foreach ($products as $product) {
-                $result[] = Deserializer::deserializeArray($product, OrderLoyaltyData::class);
-            }
-        
-            return $result;
+            return $this->dataManager::query()
+                ->setSelect(['*'])
+                ->where('UF_ORDER_ID', '=', $orderId)
+                ->fetchAll();
+
         } catch (SystemException | Exception $exception) {
-            AddMessage2Log($exception->getMessage());
+            $this->logger->write($exception->getMessage(), Constants::LOYALTY_ERROR);
         }
+
+        return [];
     }
-    
+
     /**
      * @param \Intaro\RetailCrm\Model\Bitrix\OrderLoyaltyData $position
      * @return bool
@@ -148,7 +173,7 @@ class OrderLoyaltyDataRepository extends AbstractRepository
             }
             
         } catch (Exception $exception) {
-            AddMessage2Log($exception->getMessage());
+            $this->logger->write($exception->getMessage(), Constants::LOYALTY_ERROR);
         }
         
         return false;
@@ -177,7 +202,7 @@ class OrderLoyaltyDataRepository extends AbstractRepository
             }
         
         } catch (SystemException | Exception $exception) {
-            AddMessage2Log($exception->getMessage());
+            $this->logger->write($exception->getMessage(), Constants::LOYALTY_ERROR);
         }
     
         return null;

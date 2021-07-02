@@ -639,7 +639,7 @@
 				url: this.ajaxUrl,
 				data: this.getData(data),
 				onsuccess: BX.delegate(function(result) {
-				BX.ajax.runAction('intaro:retailcrm.api.loyalty.basket.calculateBasketBonuses',
+				BX.ajax.runAction('intaro:retailcrm.api.loyalty.basket.addLoyaltyToBasket',
 						{
 							method:    'POST',
 							data:      {
@@ -648,12 +648,12 @@
 							},
 						}
 						).then((response) => {
-						//если это бонусы
+						//если это бонусы TOTAL
 						if (response.data.WILL_BE_CREDITED !== undefined) {
 							$('#BONUSES_TOTAL').text(response.data.WILL_BE_CREDITED);
 						}
 
-						//если это скидки
+						//если это скидки TOTAL
 						if (response.data.TOTAL_RENDER_DATA.LOYALTY_DISCOUNT_FORMATED !== undefined) {
 							$('#LOYALTY_DISCOUNT_TOTAL')
 								.text(response.data.TOTAL_RENDER_DATA.LOYALTY_DISCOUNT_FORMATED);
@@ -663,6 +663,9 @@
 
 							$('.basket-coupon-block-total-price-difference').find('span:first-child')
 								.text(response.data.TOTAL_RENDER_DATA.DISCOUNT_PRICE_FORMATED);
+
+							$('.basket-coupon-block-total-price-old')
+								.html(response.data.TOTAL_RENDER_DATA.PRICE_WITHOUT_DISCOUNT_FORMATED);
 
 							$('#LOYALTY_DISCOUNT_DEFAULT')
 								.text(response.data.TOTAL_RENDER_DATA.LOYALTY_DISCOUNT_DEFAULT);
@@ -699,8 +702,6 @@
 								}
 							);
 						}
-					}
-				);
 
 					this.actionPool.doProcessing(false);
 
@@ -721,7 +722,7 @@
 						this.deleteBasketItems(result.MERGED_BASKET_ITEMS, false, true);
 					}
 
-					this.applyBasketResult(result.BASKET_DATA);
+					this.applyBasketResult(response.data);
 
 					this.editBasketItems(this.getItemsToEdit());
 					this.editTotal();
@@ -734,6 +735,9 @@
 					if (this.isBasketIntegrated() && this.isBasketChanged()) {
 						BX.Sale.OrderAjaxComponent.sendRequest();
 					}
+
+					}
+				);
 
 				}, this),
 				onfailure: BX.delegate(function() {

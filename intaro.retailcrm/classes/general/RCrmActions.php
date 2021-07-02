@@ -15,15 +15,21 @@ class RCrmActions
     public static $CRM_API_VERSION = 'api_version';
 
     const CANCEL_PROPERTY_CODE = 'INTAROCRM_IS_CANCELED';
-
-    public static function SitesList()
+    
+    /**
+     * Возвращает массив сайтов, созданных на текущей лицензии Битрикс
+     *
+     * @return array
+     */
+    public static function sitesList(): array
     {
-        $arSites = array();
-        $rsSites = CSite::GetList($by, $sort, array('ACTIVE' => 'Y'));
+        $arSites = [];
+        $rsSites = CSite::GetList($by, $sort, ['ACTIVE' => 'Y']);
+        
         while ($ar = $rsSites->Fetch()) {
             $arSites[] = $ar;
         }
-
+    
         return $arSites;
     }
 
@@ -179,15 +185,15 @@ class RCrmActions
 
     public static function eventLog($auditType, $itemId, $description)
     {
-        CEventLog::Add(array(
+        CEventLog::Add([
             "SEVERITY"      => "SECURITY",
             "AUDIT_TYPE_ID" => $auditType,
             "MODULE_ID"     => self::$MODULE_ID,
             "ITEM_ID"       => $itemId,
             "DESCRIPTION"   => $description,
-        ));
+        ]);
     }
-
+    
     /**
      *
      * Agent function

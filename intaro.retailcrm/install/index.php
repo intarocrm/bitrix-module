@@ -17,6 +17,8 @@ use Bitrix\Main\ObjectPropertyException;
 use Bitrix\Main\SystemException;
 use Bitrix\Sale\Delivery\Services\Manager;
 use Bitrix\Sale\Internals\OrderTable;
+use Intaro\RetailCrm\Component\ConfigProvider;
+use Intaro\RetailCrm\Component\Constants;
 use Intaro\RetailCrm\Component\Handlers\EventsHandlers;
 use Intaro\RetailCrm\Model\Bitrix\Agreement;
 use Intaro\RetailCrm\Repository\AgreementRepository;
@@ -24,6 +26,7 @@ use Intaro\RetailCrm\Service\OrderLoyaltyDataService;
 use \RetailCrm\ApiClient;
 use RetailCrm\Exception\CurlException;
 use Intaro\RetailCrm\Repository\ToModuleRepository;
+use RetailCrm\Http\Client;
 
 Loader::IncludeModule('highloadblock');
 
@@ -247,7 +250,7 @@ class intaro_retailcrm extends CModule
         $service->addCustomersLoyaltyFields();
 
         if ($step == 11) {
-            $arResult['arSites'] = RCrmActions::SitesList();
+            $arResult['arSites'] = RCrmActions::sitesList();
             if (count($arResult['arSites']) < 2) {
                 $step = 2;
             }
@@ -316,11 +319,12 @@ class intaro_retailcrm extends CModule
                 return false;
             }
 
-            $ping = $this->ping($api_host, $api_key);
-            if (isset($ping['sitesList'])) {
-                $arResult['sitesList'] = $ping['sitesList'];
-            } elseif (isset($ping['errCode'])) {
-                $arResult['errCode'] = $ping['errCode'];
+            $shopResponse = $this->getReferenceShops($api_host, $api_key);
+
+            if (isset($shopResponse['sitesList'])) {
+                $arResult['sitesList'] = $shopResponse['sitesList'];
+            } elseif (isset($shopResponse['errCode'])) {
+                $arResult['errCode'] = $shopResponse['errCode'];
                 $APPLICATION->IncludeAdminFile(
                     GetMessage('MODULE_INSTALL_TITLE'), $this->INSTALL_PATH . '/step1.php'
                 );
@@ -357,7 +361,7 @@ class intaro_retailcrm extends CModule
                 return false;
             }
 
-            $arResult['arSites'] = RCrmActions::SitesList();
+            $arResult['arSites'] = RCrmActions::sitesList();
 
             if (count($arResult['arSites']) > 1) {
 
@@ -402,11 +406,12 @@ class intaro_retailcrm extends CModule
                     return false;
                 }
 
-                $ping = $this->ping($api_host, $api_key);
-                if (isset($ping['sitesList'])) {
-                    $arResult['sitesList'] = $ping['sitesList'];
-                } elseif (isset($ping['errCode'])) {
-                    $arResult['errCode'] = $ping['errCode'];
+                $shopResponse = $this->getReferenceShops($api_host, $api_key);
+                
+                if (isset($shopResponse['sitesList'])) {
+                    $arResult['sitesList'] = $shopResponse['sitesList'];
+                } elseif (isset($shopResponse['errCode'])) {
+                    $arResult['errCode'] = $shopResponse['errCode'];
                     $APPLICATION->IncludeAdminFile(
                         GetMessage('MODULE_INSTALL_TITLE'), $this->INSTALL_PATH . '/step1.php'
                     );
@@ -499,7 +504,7 @@ class intaro_retailcrm extends CModule
             $this->RETAIL_CRM_API = new ApiClient($api_host, $api_key);
 
             //bitrix orderTypesList
-            $arResult['arSites']              = RCrmActions::SitesList();
+            $arResult['arSites']              = RCrmActions::sitesList();
             $arResult['bitrixOrderTypesList'] = RCrmActions::OrderTypesList($arResult['arSites']);
 
             $orderTypesArr = [];
@@ -676,7 +681,7 @@ class intaro_retailcrm extends CModule
             }
 
             //bitrix orderTypesList
-            $orderTypesList = RCrmActions::OrderTypesList(RCrmActions::SitesList());
+            $orderTypesList = RCrmActions::OrderTypesList(RCrmActions::sitesList());
 
             $orderTypesArr = [];
             foreach ($orderTypesList as $orderType) {
@@ -889,15 +894,15 @@ class intaro_retailcrm extends CModule
             }
 
             $iblockProperties = [
-                "article"      => "article",
-                "manufacturer" => "manufacturer",
-                "color"        => "color",
-                "weight"       => "weight",
-                "size"         => "size",
-                "length"       => "length",
-                "width"        => "width",
-                "height"       => "height",
-                "picture"      => "picture",
+                'article'      => 'article',
+                'manufacturer' => 'manufacturer',
+                'color'        => 'color',
+                'weight'       => 'weight',
+                'size'         => 'size',
+                'length'       => 'length',
+                'width'        => 'width',
+                'height'       => 'height',
+                'picture'      => 'picture',
             ];
 
             $propertiesSKU     = [];
@@ -1020,8 +1025,6 @@ class intaro_retailcrm extends CModule
                 30
             );
 
-            $this->CopyFiles();
-
             if (isset($_POST['LOAD_NOW'])) {
                 $loader                        = new RetailCrmICML();
                 $loader->iblocks               = $iblocks;
@@ -1105,11 +1108,11 @@ class intaro_retailcrm extends CModule
                     );
 
                     CCatalogExport::Update($PROFILE_ID, [
-                        "IN_AGENT" => "Y",
+                        'IN_AGENT' => 'Y',
                     ]);
                 } else {
                     $agent_period   = 24;
-                    $agent_php_path = "/usr/local/php/bin/php";
+                    $agent_php_path = '/usr/local/php/bin/php';
 
                     if (!file_exists($_SERVER["DOCUMENT_ROOT"] . CATALOG_PATH2EXPORTS . "cron_frame.php")) {
                         CheckDirPath($_SERVER["DOCUMENT_ROOT"] . CATALOG_PATH2EXPORTS);
@@ -1195,15 +1198,15 @@ class intaro_retailcrm extends CModule
         $api_key     = COption::GetOptionString($this->MODULE_ID, $this->CRM_API_KEY_OPTION, 0);
         $api_version = COption::GetOptionString($this->MODULE_ID, $this->CRM_API_VERSION, 0);
 
-        include($this->INSTALL_PATH . '/../classes/general/Http/Client.php');
-        include($this->INSTALL_PATH . '/../classes/general/Response/ApiResponse.php');
-        include($this->INSTALL_PATH . '/../classes/general/Exception/InvalidJsonException.php');
-        include($this->INSTALL_PATH . '/../classes/general/Exception/CurlException.php');
-        include($this->INSTALL_PATH . '/../classes/general/RCrmActions.php');
-        include($this->INSTALL_PATH . '/../classes/general/Logger.php');
-        include($this->INSTALL_PATH . '/../classes/general/ApiClient_v5.php');
-        include($this->INSTALL_PATH . '/../classes/general/order/RetailCrmOrder_v5.php');
-        include($this->INSTALL_PATH . '/../classes/general/history/RetailCrmHistory_v5.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/Http/Client.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/Response/ApiResponse.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/Exception/InvalidJsonException.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/Exception/CurlException.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/RCrmActions.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/Logger.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/ApiClient_v5.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/order/RetailCrmOrder_v5.php');
+        require_once($this->INSTALL_PATH . '/../classes/general/history/RetailCrmHistory_v5.php');
 
         $retail_crm_api = new ApiClient($api_host, $api_key);
 
@@ -1294,15 +1297,16 @@ class intaro_retailcrm extends CModule
             true,
             false
         );
-
+    
         $lpTemplateNames = [
             'sale.order.ajax',
+            'sale.basket.basket',
             'main.register',
         ];
 
         foreach ($lpTemplateNames as $lpTemplateName){
             $lpTemplatePath = $_SERVER['DOCUMENT_ROOT']
-                . '/local/templates/.default/components/bitrix/' . $lpTemplateName . '/intaro.retailcrm';
+                . '/local/templates/.default/components/bitrix/' . $lpTemplateName . '/default_loyalty';
 
             if (!file_exists($lpTemplatePath)) {
                 $pathFrom = $_SERVER['DOCUMENT_ROOT']
@@ -1460,12 +1464,20 @@ class intaro_retailcrm extends CModule
 
         return $end['id'];
     }
-
-    function ping($api_host, $api_key)
+    
+    /**
+     * Возвращает список магазинов, связанных с текущим ключом API
+     *
+     * @param string $api_host
+     * @param string $api_key
+     *
+     * @return array
+     */
+    private function getReferenceShops(string $api_host, string $api_key): array
     {
         global $APPLICATION;
 
-        $client = new RetailCrm\Http\Client($api_host . '/api/'.self::V5, ['apiKey' => $api_key]);
+        $client = new Client($api_host . '/api/'.self::V5, ['apiKey' => $api_key]);
         try {
             $result = $client->makeRequest('/reference/sites', 'GET');
         } catch (CurlException $e) {
@@ -1476,11 +1488,16 @@ class intaro_retailcrm extends CModule
 
             $res['errCode'] = 'ERR_' . $e->getCode();
         }
-
-        if ($result->getStatusCode() == 200) {
-            COption::SetOptionString($this->MODULE_ID, $this->CRM_API_VERSION, self::V5);
-            $res['sitesList'] = $APPLICATION->ConvertCharsetArray($result->sites, 'utf-8', SITE_CHARSET);
-
+    
+        if (!isset($result) || $result->getStatusCode() == 200) {
+            ConfigProvider::setApiVersion(self::V5);
+        
+            $res['sitesList'] = $APPLICATION->ConvertCharsetArray(
+                $result->sites,
+                'utf-8',
+                SITE_CHARSET
+            );
+        
             return $res;
         } else {
             $res['errCode'] = 'ERR_METHOD_NOT_FOUND';
@@ -1593,7 +1610,11 @@ class intaro_retailcrm extends CModule
                     );
                 }
             } catch (ObjectPropertyException | ArgumentException | SystemException $exception) {
-                AddMessage2Log($exception->getMessage(), $this->MODULE_ID);
+                RCrmActions::eventLog(
+                    'intaro.retailcrm/install/index.php',
+                    'RetailCrm\ApiClient::addLPEvents',
+                    $exception->getMessage()
+                );
             }
         }
     }

@@ -109,7 +109,7 @@ if (file_exists($_SERVER["DOCUMENT_ROOT"] . '/bitrix/modules/intaro.retailcrm/cl
     }
 }
 
-$arResult['arSites'] = RCrmActions::SitesList();
+$arResult['arSites'] = RCrmActions::sitesList();
 //ajax update deliveryServices
 if (!empty($_SERVER['HTTP_X_REQUESTED_WITH']) && (strtolower($_SERVER['HTTP_X_REQUESTED_WITH']) === 'xmlhttprequest') && isset($_POST['ajax']) && ($_POST['ajax'] === 1)) {
     $api_host = COption::GetOptionString($mid, $CRM_API_HOST_OPTION, 0);
@@ -313,17 +313,25 @@ if (isset($_POST['Update']) && ($_POST['Update'] === 'Y')) {
     foreach ($orderTypesList as $orderType) {
         $propsCount     = 0;
         $_orderPropsArr = [];
+        
         foreach ($arResult['orderProps'] as $orderProp) {
             if (isset($_POST['address-detail-' . $orderType['ID']])) {
                 $addressDatailOptions[$orderType['ID']] = $_POST['address-detail-' . $orderType['ID']];
             }
 
-            if ((!(int)htmlspecialchars(trim($_POST['address-detail-' . $orderType['ID']]))) && $propsCount > 4) {
+            if (
+                (!(int) htmlspecialchars(trim($_POST['address-detail-' . $orderType['ID']])))
+                && $propsCount > 4
+            ) {
                 break;
             }
-            $_orderPropsArr[$orderProp['ID']] = htmlspecialchars(trim($_POST['order-prop-' . $orderProp['ID'] . '-' . $orderType['ID']]));
+            
+            $_orderPropsArr[$orderProp['ID']] = htmlspecialchars(
+                trim($_POST['order-prop-' . $orderProp['ID'] . '-' . $orderType['ID']])
+            );
             $propsCount++;
         }
+        
         $orderPropsArr[$orderType['ID']] = $_orderPropsArr;
     }
 
@@ -573,7 +581,10 @@ if (isset($_POST['Update']) && ($_POST['Update'] === 'Y')) {
                 OrderLoyaltyDataService::createLoyaltyHlBlock();
             }
         } catch (LoaderException | SystemException $exception) {
-            AddMessage2Log($exception->getMessage());
+            RCrmActions::eventLog(
+                'intaro.retailcrm/options.php', 'OrderLoyaltyDataService::createLoyaltyHlBlock',
+                $e->getCode() . ': ' . $exception->getMessage()
+            );
         }
         
         ConfigProvider::setLoyaltyProgramStatus('Y');
@@ -592,12 +603,7 @@ if (isset($_POST['Update']) && ($_POST['Update'] === 'Y')) {
             'OnAdminContextMenuShow',
             Constants::MODULE_ID,
             EventsHandlers::class,
-            'addUpdateLoyaltyButton'
-        );
-        AddEventHandler(
-            'main',
-            'OnAdminContextMenuShow',
-            'OrderDetailAdminContextMenuShow'
+            'OnAdminContextMenuShowHandler'
         );
     } else {
         ConfigProvider::setLoyaltyProgramStatus('N');
@@ -824,8 +830,11 @@ if (isset($_POST['Update']) && ($_POST['Update'] === 'Y')) {
     
     try {
         Extension::load("ui.notification");
-    } catch (LoaderException $e) {
-        AddMessage2Log($e->getMessage());
+    } catch (LoaderException $exception) {
+        RCrmActions::eventLog(
+            'intaro.retailcrm/options.php', 'Extension::load',
+            $e->getCode() . ': ' . $exception->getMessage()
+        );
     }
     ?>
     <script type="text/javascript">
@@ -1330,10 +1339,13 @@ if (isset($_POST['Update']) && ($_POST['Update'] === 'Y')) {
                         <select name="order-type-<?php echo $bitrixOrderType['ID']; ?>" class="typeselect">
                             <option value=""></option>
                             <?php foreach ($arResult['orderTypesList'] as $orderType): ?>
-                                <option value="<?php echo $orderType['code']; ?>" <?php if ($optionsOrderTypes[$bitrixOrderType['ID']] === $orderType['code']) {
+                                <option value="<?php echo $orderType['code']; ?>"
+                                    <?php if ($optionsOrderTypes[$bitrixOrderType['ID']] === $orderType['code']) {
                                     echo 'selected';
                                 } ?>>
-                                    <?php echo $APPLICATION->ConvertCharset($orderType['name'], 'utf-8', SITE_CHARSET); ?>
+                                    <?= $APPLICATION
+                                        ->ConvertCharset($orderType['name'], 'utf-8', SITE_CHARSET)
+                                    ?>
                                 </option>
                             <?php endforeach; ?>
                         </select>
@@ -1371,14 +1383,24 @@ if (isset($_POST['Update']) && ($_POST['Update'] === 'Y')) {
                         <tr class="heading">
                             <td colspan="2" style="background-color: transparent;">
                                 <b>
-                                    <label><input class="addr" type="radio" name="address-detail-<?php echo $bitrixOrderType['ID']; ?>" value="0" <?php if ($addressOptions[$bitrixOrderType['ID']]
-                                            === 0) {
-                                            echo "checked";
-                                        } ?>><?php echo GetMessage('ADDRESS_SHORT'); ?></label>
-                                    <label><input class="addr" type="radio" name="address-detail-<?php echo $bitrixOrderType['ID']; ?>" value="1" <?php if ($addressOptions[$bitrixOrderType['ID']]
-                                            === 1) {
-                                            echo "checked";
-                                        } ?>><?php echo GetMessage('ADDRESS_FULL'); ?></label>
+                                    <label>
+                                        <input class="addr" type="radio" name="address-detail-<?php echo $bitrixOrderType['ID']; ?>" value="0" 
+                                            <?php
+                                            if ($addressOptions[$bitrixOrderType['ID']] === '0') {
+                                                echo 'checked';
+                                            } 
+                                        ?>>
+                                        <?= GetMessage('ADDRESS_SHORT')?>
+                                    </label>
+                                    <label>
+                                        <input class="addr" type="radio" name="address-detail-<?php echo $bitrixOrderType['ID']; ?>" value="1" 
+                                            <?php
+                                            if ($addressOptions[$bitrixOrderType['ID']] === '1') {
+                                                echo 'checked';
+                                            } 
+                                            ?>>
+                                        <?= GetMessage('ADDRESS_FULL')?>
+                                    </label>
                                 </b>
                             </td>
                         </tr>

@@ -16,8 +16,10 @@ namespace Intaro\RetailCrm\Service;
 use Bitrix\Main\Entity\DataManager;
 use Bitrix\Main\Loader;
 use Bitrix\Main\Text\Encoding;
+use Intaro\RetailCrm\Component\Constants;
 use Intaro\RetailCrm\Model\Api\Response\AbstractApiResponseModel;
 use Bitrix\Highloadblock as Highloadblock;
+use Logger;
 
 /**
  * Class Utils
@@ -29,16 +31,17 @@ class Utils
     /**
      * Removes all empty fields from arrays, works for nested arrays
      *
-     * @param array $arr
-     * @return array
+     * @param array|null $arr
+     *
+     * @return array|null
      */
-    public function clearArray($arr)
+    public function clearArray(?array $arr): ?array
     {
         if (is_array($arr) === false) {
             return $arr;
         }
 
-        $result = array();
+        $result = [];
 
         foreach ($arr as $index => $node) {
             $result[$index] = is_array($node) === true ? $this->clearArray($node) : trim($node);
@@ -129,7 +132,8 @@ class Utils
     }
     
     /**
-     * @param $response
+     * @param \Intaro\RetailCrm\Model\Api\Response\AbstractApiResponseModel $response
+     *
      * @return string
      */
     public static function getResponseErrors(AbstractApiResponseModel $response): string
@@ -161,7 +165,7 @@ class Utils
             
             $msg = sprintf('%s (%s %s)', GetMessage('REGISTER_ERROR'), $response->errorMsg, $errorDetails);
             
-            AddMessage2Log($msg);
+            Logger::getInstance()->write($msg);
             
             return $msg;
         }
@@ -170,12 +174,16 @@ class Utils
     }
     
     /**
-     * @param \Intaro\RetailCrm\Model\Api\Response\AbstractApiResponseModel $response
-     * @param string                                                        $errorMsg
+     * @param \Intaro\RetailCrm\Model\Api\Response\AbstractApiResponseModel|null $response
+     * @param string                                                             $errorMsg
      */
-    public static function handleErrors(AbstractApiResponseModel $response, $errorMsg = 'ERROR')
+    public static function handleApiErrors(?AbstractApiResponseModel $response, string $errorMsg = 'ERROR')
     {
-        if (isset($response->errorMsg) && !empty($response->errorMsg)) {
+        if (
+            $response instanceof AbstractApiResponseModel
+            && isset($response->errorMsg)
+            && !empty($response->errorMsg)
+        ) {
             $errorDetails = '';
         
             if (isset($response->errors) && is_array($response->errors)) {
@@ -183,8 +191,8 @@ class Utils
             }
         
             $msg = sprintf('%s (%s %s)', $errorMsg, $response->errorMsg, $errorDetails);
-        
-            AddMessage2Log($msg);
+    
+            Logger::getInstance()->write($msg, Constants::API_ERRORS_LOG);
         }
     }
     
@@ -196,9 +204,7 @@ class Utils
      */
     public static function filterPhone(string $phoneNumber)
     {
-        $phoneNumber = preg_replace('/\s|\+|-|\(|\)/', '', $phoneNumber);
-        
-        return $phoneNumber;
+        return preg_replace('/\s|\+|-|\(|\)/', '', $phoneNumber);
     }
 
     /**

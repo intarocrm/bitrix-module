@@ -647,6 +647,8 @@ class ConfigProvider
     }
 
     /**
+     * Включена ли программа лояльности
+     *
      * @return string|null
      */
     public static function getLoyaltyProgramStatus()
@@ -897,10 +899,20 @@ class ConfigProvider
     }
     
     /**
-     * @return false|string|null
+     * @return void
      */
     public static function setDiscountRound($discount_round)
     {
         COption::SetOptionString(Constants::MODULE_ID, Constants::CRM_DISCOUNT_ROUND, $discount_round);
+    }
+    
+    /**
+     * @param string $version
+     *
+     * @return mixed
+     */
+    public static function setApiVersion(string $version)
+    {
+        return COption::SetOptionString(Constants::MODULE_ID, Constants::CRM_API_VERSION, $version);
     }
 }

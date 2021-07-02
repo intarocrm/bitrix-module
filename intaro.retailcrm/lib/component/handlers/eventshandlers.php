@@ -18,12 +18,16 @@ IncludeModuleLangFile(__FILE__);
 use Bitrix\Main\Event;
 use Bitrix\Main\HttpRequest;
 use Bitrix\Sale\Order;
+use Intaro\RetailCrm\Component\Builder\Bitrix\LoyaltyDataBuilder;
 use Intaro\RetailCrm\Component\ConfigProvider;
 use Intaro\RetailCrm\Component\ServiceLocator;
 use Intaro\RetailCrm\Repository\UserRepository;
 use Intaro\RetailCrm\Service\LoyaltyService;
-use Intaro\RetailCrm\Service\LpUserAccountService;
+use Intaro\RetailCrm\Service\LoyaltyAccountService;
 use Intaro\RetailCrm\Service\CustomerService;
+use Intaro\RetailCrm\Service\OrderLoyaltyDataService;
+use Intaro\RetailCrm\Service\Utils;
+use Logger;
 use RetailCrmEvent;
 use Throwable;
 
@@ -46,6 +50,8 @@ class EventsHandlers
     
     /**
      * Обработчик события, вызываемого при обновлении еще не сохраненного заказа
+     *
+     * Модифицирует данные $arResult с учетом привилегий покупателя по Программе лояльности
      *
      * @param \Bitrix\Sale\Order       $order
      * @param array                    $arUserResult
@@ -106,9 +112,12 @@ class EventsHandlers
     }
     
     /**
+     * Обновляет информацию о Программе лояльности в административной панели.
+     * При каждом открытии заказа делает запрос к CRM и получает актуальную информацию.
+     *
      * @param $items
      */
-    public function addUpdateLoyaltyButton(&$items)
+    public function OnAdminContextMenuShowHandler(&$items)
     {
         global $APPLICATION;
         
@@ -117,8 +126,9 @@ class EventsHandlers
             && $_REQUEST['ID'] > 0
             && $APPLICATION->GetCurPage() === '/bitrix/admin/sale_order_view.php'
         ) {
-            /** @var LoyaltyService $service */
-            $service = ServiceLocator::get(LoyaltyService::class);
+            /* @var OrderLoyaltyDataService $service */
+            $service = ServiceLocator::get(OrderLoyaltyDataService::class);
+            
             $service->updateLoyaltyInfo($_REQUEST['ID']);
         }
     }
@@ -137,20 +147,28 @@ class EventsHandlers
         try {
             /* @var LoyaltyService $loyaltyService */
             $loyaltyService = ServiceLocator::get(LoyaltyService::class);
+            
+            /* @var OrderLoyaltyDataService $orderLoyaltyDataService */
+            $orderLoyaltyDataService = ServiceLocator::get(OrderLoyaltyDataService::class);
             $retailCrmEvent = new RetailCrmEvent();
             /** @var Order $order */
             $order = $event->getParameter('ENTITY');
     
             // TODO: Replace old call with a new one.
-            $retailCrmEvent->orderSave($order);
-    
-            $isBonusInput = isset($_POST['bonus-input'], $_POST['available-bonuses']);
+            $saveResult = $retailCrmEvent->orderSave($order);
+            
+            Utils::handleApiErrors($saveResult);
+            
+            $isBonusInput = (
+                !empty($_POST['bonus-input'])
+                && !empty($_POST['available-bonuses'])
+            );
             /** @var bool $isNewOrder */
             $isNewOrder                 = $event->getParameter('IS_NEW');
             $isLoyaltyOn                = ConfigProvider::getLoyaltyProgramStatus() === 'Y';
             $isDataForLoyaltyDiscount   = isset($_POST['calculate-items-input'], $_POST['loyalty-discount-input']);
             $isBonusesIssetAndAvailable = $isBonusInput
-                && (int)$_POST['available-bonuses'] >= (int) $_POST['bonus-input'];
+                && (int) $_POST['available-bonuses'] >= (int) $_POST['bonus-input'];
             
             /** @var array $calculateItemsInput */
             $calculateItemsInput        = $isDataForLoyaltyDiscount
@@ -159,21 +177,21 @@ class EventsHandlers
     
             if ($isNewOrder && $isLoyaltyOn) {
                 self::$disableSaleHandler = true;
-                $hlInfo                   = $loyaltyService->addMainInfoToHl($order);
+                
+                $hlInfoBuilder = new LoyaltyDataBuilder();
+                $hlInfoBuilder->setOrder($order);
+                
                 $discountInput            = isset($_POST['loyalty-discount-input'])
-                    ? (float)$_POST['loyalty-discount-input']
+                    ? (float) $_POST['loyalty-discount-input']
                     : 0;
                 
                 $loyaltyBonusMsg = 0;
         
                 //Если есть бонусы
                 if ($isBonusesIssetAndAvailable) {
-                    $hlInfo = $loyaltyService->saveBonuses(
-                        $order,
-                        $hlInfo,
-                        (int) $_POST['bonus-input']
+                    $hlInfoBuilder->setApplyResponse(
+                        $loyaltyService->applyBonusesInOrder($order, (int) $_POST['bonus-input'])
                     );
-            
                     $loyaltyBonusMsg = (int) $_POST['bonus-input'];
                 }
         
@@ -181,21 +199,19 @@ class EventsHandlers
                 if ($isDataForLoyaltyDiscount && !$isBonusInput) {
                     $loyaltyService->saveDiscounts($order, $calculateItemsInput);
                 }
-        
-                $loyaltyService->saveBonusAndDiscToOrderProps(
+    
+                $orderLoyaltyDataService->saveBonusAndDiscToOrderProps(
                     $order->getPropertyCollection(),
                     $discountInput,
                     $loyaltyBonusMsg
                 );
-        
-                $hlInfo = $loyaltyService->addDiscountsToHl($calculateItemsInput, $hlInfo);
-                
-                $loyaltyService->saveLoyaltyInfoToHl($hlInfo);
+                $hlInfoBuilder->setCalculateItemsInput($calculateItemsInput);
+                $orderLoyaltyDataService->saveLoyaltyInfoToHl($hlInfoBuilder->build()->getResult());
     
                 self::$disableSaleHandler = false;
             }
         } catch (Throwable $exception) {
-            AddMessage2Log(GetMessage('CAN_NOT_SAVE_ORDER') . $exception->getMessage());
+            Logger::getInstance()->write(GetMessage('CAN_NOT_SAVE_ORDER') . $exception->getMessage(), 'uploadApiErrors');
         }
     }
     
@@ -238,8 +254,8 @@ class EventsHandlers
                 $customerId     = (string) $arFields['USER_ID'];
                 $customFields   = $arFields['UF_CSTM_FLDS_INTARO'] ?? [];
                 
-                /** @var LpUserAccountService $service */
-                $service        = ServiceLocator::get(LpUserAccountService::class);
+                /** @var LoyaltyAccountService $service */
+                $service        = ServiceLocator::get(LoyaltyAccountService::class);
                 $createResponse = $service->createLoyaltyAccount($phone, $card, $customerId, $customFields);
 
                 $service->activateLpUserInBitrix($createResponse, $arFields['USER_ID']);

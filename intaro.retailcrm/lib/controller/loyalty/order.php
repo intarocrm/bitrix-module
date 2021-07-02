@@ -19,7 +19,7 @@ use Bitrix\Main\Engine\Controller;
 use Intaro\RetailCrm\Component\ServiceLocator;
 use Intaro\RetailCrm\Model\Api\Response\Loyalty\LoyaltyCalculateResponse;
 use Intaro\RetailCrm\Service\LoyaltyService;
-use Intaro\RetailCrm\Service\LpUserAccountService;
+use Intaro\RetailCrm\Service\LoyaltyAccountService;
 use Intaro\RetailCrm\Service\Utils;
 
 /**
@@ -31,40 +31,42 @@ class Order extends Controller
 {
     
     /**
-     * Контроллер для пересчета бонусов
+     * Возвращает результат расчета привилегий программы лояльности
      *
      * @param array     $basketItems
      * @param float|int $inputBonuses
      *
      * @return \Intaro\RetailCrm\Model\Api\Response\Loyalty\LoyaltyCalculateResponse|null
      */
-    public function calculateBonusAction(array $basketItems, float $inputBonuses = 0): ?LoyaltyCalculateResponse
+    public function loyaltyCalculateAction(array $basketItems, float $inputBonuses = 0): ?LoyaltyCalculateResponse
     {
         /** @var LoyaltyService $service */
         $service  = ServiceLocator::get(LoyaltyService::class);
-        $response = $service->calculateBonus($basketItems, $inputBonuses);
+        $response = $service->getLoyaltyCalculate($basketItems, $inputBonuses);
 
         if ($response instanceof LoyaltyCalculateResponse) {
             if ($response->success && count($response->order->items) > 0) {
                 return $response;
             }
             
-            Utils::handleErrors($response);
+            Utils::handleApiErrors($response);
         }
         
         return null;
     }
     
     /**
-     * @param string $verificationCode
-     * @param int    $orderId
-     * @param string $checkId
+     * Отправляет код верификации из смс
+     *
+     * @param string $verificationCode Проверочный код
+     * @param int    $orderId id заказа
+     * @param string $checkId Идентификатор проверки кода
      * @return array
      */
     public function sendVerificationCodeAction(string $verificationCode, int $orderId, string $checkId): array
     {
-        /** @var LpUserAccountService $service */
-        $service  = ServiceLocator::get(LpUserAccountService::class);
+        /** @var LoyaltyAccountService $service */
+        $service  = ServiceLocator::get(LoyaltyAccountService::class);
         $response = $service->confirmVerification($verificationCode, $checkId);
 
         if ($response !== null && isset($response->errorMsg) && !empty($response->errorMsg)) {
@@ -101,10 +103,10 @@ class Order extends Controller
     /**
      * Повторно отправляет смс с кодом верификации
      *
-     * @param $orderId
+     * @param int $orderId id заказа
      * @return \Intaro\RetailCrm\Model\Bitrix\SmsCookie|array
      */
-    public function resendOrderSmsAction($orderId)
+    public function resendOrderSmsAction(int $orderId)
     {
         /** @var LoyaltyService $service */
         $service = ServiceLocator::get(LoyaltyService::class);
